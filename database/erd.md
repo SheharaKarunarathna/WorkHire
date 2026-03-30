@@ -11,18 +11,18 @@ erDiagram
 
     worker_profiles ||--o{ worker_availability_slots : owns
 
-    user_profiles ||--o{ service_requests : creates
-    service_categories ||--o{ service_requests : requested_for
-    worker_profiles ||--o{ service_requests : assigned_to
+    user_profiles ||--o{ requests : creates
+    service_categories ||--o{ requests : requested_for
+    worker_profiles ||--o{ requests : assigned_to
 
-    service_requests ||--o{ bids : receives
+    requests ||--o{ bids : receives
     worker_profiles ||--o{ bids : places
 
-    service_requests ||--|| reviews : has
+    requests ||--|| reviews : has
     user_profiles ||--o{ reviews : writes
     worker_profiles ||--o{ reviews : gets
 
-    service_requests ||--o{ request_status_history : tracks
+    requests ||--o{ request_status_history : tracks
     accounts ||--o{ request_status_history : changes
 
     accounts ||--o{ notifications : receives
@@ -43,7 +43,7 @@ erDiagram
       int ratings_count
     }
 
-    service_requests {
+    requests {
       uuid id PK
       uuid user_account_id FK
       bigint requested_category_id FK

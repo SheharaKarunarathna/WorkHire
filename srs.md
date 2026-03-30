@@ -8,7 +8,9 @@ The purpose of this document is to define the functional and non-functional requ
 
 ### 1.2 Scope
 
-WorkHire is a full-stack web application aimed at providing an efficient and reliable platform for on-demand services. Users can create service requests, track their status, and rate workers, while workers can manage requests, update statuses, and receive job notifications. The system supports real-time updates, location-based matching, and scalable deployment. Future enhancements may include AI-based recommendations and live tracking. And there may be a bidding system to bid for each job. 
+WorkHire is a full-stack web application aimed at providing an efficient and reliable platform for on-demand services. Users can create service requests, track their status, and rate workers, while workers can manage requests, update statuses, and receive job notifications. The system supports two request flows: open marketplace requests (where workers can bid) and direct requests to a specific worker (who can accept or reject). The system also supports real-time updates, location-based matching, and scalable deployment. Future enhancements may include AI-based recommendations and live tracking.
+
+In this context, the existing request/bid model is treated as an open service ad flow. In addition, the system shall provide a direct hire flow where a user can send a detailed request to one selected worker without publishing it to the open marketplace.
 
 ### 1.3 Definitions, Acronyms, and Abbreviations
 
@@ -47,7 +49,10 @@ WorkHire is a web-based platform integrating the following components:
 
 * User registration and authentication
 * Worker registration and profile management
-* Service request creation, assignment, and tracking
+* Open service ad creation with bidding and bid selection
+* Direct service request to a selected worker with accept/reject flow
+* Service request tracking
+* Open request bidding and bid acceptance workflow
 * Location-based worker-user matching
 * Real-time status updates
 * Ratings and reviews
@@ -91,34 +96,57 @@ WorkHire is a web-based platform integrating the following components:
 
 ### 3.2 User Features
 
-* Create service request with description, category, and location
+* Create open marketplace service ads with description, category, and location
+* Create direct service requests to a specific worker with required service details
 * Book worker appointments by selecting an available date and time interval
 * View real-time request status
 * Rate and review workers
 * Receive notifications about request updates
-* Create a work offer
+* Send optional budget, urgency, and preferred schedule details in direct requests
 
 ### 3.3 Worker Features
 
 * Register as worker and set skill categories
 * Update availability status
 * Set and manage available booking time intervals
-* Accept or reject service requests
+* Accept or reject direct service requests targeted to them
 * Update job progress and completion status
-* Can bid for work offers
+* Bid for open marketplace requests
 
 ### 3.4 Matching System
 
 * Match service requests to nearest available workers based on location
 * Implement prioritization by rating, distance, and worker availability
+* Exclude direct requests from marketplace auto-matching and open bidding
 
 ### 3.5 Real-Time Communication
 
 * Notify users when a worker accepts a request
+* Notify workers when they receive direct requests and notify users when direct requests are accepted or rejected
 * Update request progress in real time
 * Optional chat system between user and worker
 
-### 3.6 Administrative Features (Optional)
+### 3.7 Request and Bid Flow Rules
+
+* System shall support `open` requests and `direct` requests
+* `open` requests represent public service ads visible to eligible workers
+* Open requests shall allow multiple worker bids
+* Direct requests shall target one worker and shall not allow bidding by other workers
+* Only the targeted worker can accept or reject a direct request
+* Once a direct request is accepted, it shall move to assigned/in-progress flow
+* A request can have only one accepted worker assignment
+
+### 3.8 Direct Request Workflow
+
+* User shall be able to select a specific worker profile and create a direct request
+* Direct request form shall include: service description, location, optional budget, urgency, and preferred appointment window
+* System shall notify only the targeted worker for a direct request
+* Targeted worker shall be able to `accept` or `reject` the direct request
+* On `accept`, request status shall become `accepted` and worker shall be assigned
+* On `reject`, request status shall become `rejected` and user shall be notified
+* User may then choose to send another direct request or convert the request to an open marketplace ad
+
+### 3.9 Administrative Features (Optional)
 
 * Dashboard for monitoring system usage
 * Manage user and worker accounts
@@ -188,20 +216,27 @@ WorkHire is a web-based platform integrating the following components:
 * `message` (optional)
 * `status` (active, withdrawn, accepted, rejected)
 * `createdAt` / `updatedAt`
+* Constraint: bids are allowed only for requests with `requestType = open`
 
 ### 5.4 Request Collection
 
 * `id` (primary key)
 * `userId` (foreign key)
-* `workerId` (foreign key)
-* `status` (pending, accepted, in-progress, completed)
+* `workerId` (foreign key, nullable for open requests; required for direct requests)
+* `requestType` (open, direct)
+* `status` (pending, accepted, rejected, in-progress, completed)
 * `description`
 * `location` (coordinates)
+* `budget` (optional)
+* `urgency` (optional: low, medium, high)
 * `appointmentDate` (optional)
 * `bookingStartTime` (optional)
 * `bookingEndTime` (optional)
 * `timeZone` (optional)
 * `createdAt` / `updatedAt`
+* `directResponseAt` (timestamp, optional)
+* Constraint: if `requestType = direct`, `workerId` must be present
+* Constraint: if `requestType = direct`, bid records must not be created for the request
 
 ---
 

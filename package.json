@@ -1,0 +1,28 @@
+{
+  "name": "workhire",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [],
+  "author": "Shehara",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SheharaKarunarathna/WorkHire.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SheharaKarunarathna/WorkHire/issues"
+  },
+  "homepage": "https://github.com/SheharaKarunarathna/WorkHire#readme",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "nodemon": "^3.1.14",
+    "pg": "^8.20.0"
+  }
+}

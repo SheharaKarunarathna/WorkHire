@@ -6,7 +6,22 @@ create extension if not exists citext; /* Since we are going to use emails as un
 DO $$ /*Raw SQL CREATE TYPE doesn't support IF NOT EXISTS syntax before PostgreSQL 13. That's why we put the logic in a DO block */
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_role') THEN
-        CREATE TYPE account_role AS ENUM ('user', 'worker', 'admin');
+        CREATE TYPE account_role AS ENUM ('user', 'worker', 'admin', 'operator');
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'account_role')
+       AND NOT EXISTS (
+           SELECT 1
+           FROM pg_enum e
+           JOIN pg_type t ON t.oid = e.enumtypid
+           WHERE t.typname = 'account_role'
+             AND e.enumlabel = 'operator'
+       ) THEN
+        ALTER TYPE account_role ADD VALUE 'operator';
     END IF;
 END
 $$;
@@ -37,6 +52,31 @@ CREATE TABLE IF NOT EXISTS account_roles (
     role account_role NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (account_id, role)
+);
+
+/* Dedicated admin profile for platform-level governance data. */
+CREATE TABLE IF NOT EXISTS admin_profiles(
+    account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+    admin_level TEXT NOT NULL DEFAULT 'standard' CHECK (admin_level IN ('standard', 'super')),
+    department TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+/* Operator profile for operations/support workflow ownership. */
+CREATE TABLE IF NOT EXISTS operator_profiles(
+    account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+    queue_name TEXT,
+    shift_start TIME,
+    shift_end TIME,
+    is_on_duty BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT operator_shift_window_chk CHECK (
+        shift_start IS NULL
+        OR shift_end IS NULL
+        OR shift_start <> shift_end
+    )
 );
 
 /* This request tag for all the direct and open requests */
@@ -83,6 +123,42 @@ CREATE TABLE IF NOT EXISTS bids(
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+/* Worker-specific profile info used during bid and rating workflows. */
+CREATE TABLE IF NOT EXISTS worker_profiles(
+    account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+    verification_status TEXT NOT NULL DEFAULT 'pending' CHECK (verification_status IN ('pending', 'verified', 'rejected')),
+    avg_rating NUMERIC(3, 2) NOT NULL DEFAULT 0 CHECK (avg_rating >= 0 AND avg_rating <= 5),
+    ratings_count INT NOT NULL DEFAULT 0 CHECK (ratings_count >= 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+/* One review per request once the job is completed. */
+CREATE TABLE IF NOT EXISTS reviews(
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    request_id UUID NOT NULL UNIQUE REFERENCES requests(id) ON DELETE CASCADE,
+    user_account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    worker_account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    review_text TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+/* Audit trail for request status transitions. */
+CREATE TABLE IF NOT EXISTS request_status_history(
+    id BIGSERIAL PRIMARY KEY,
+    request_id UUID NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    changed_by_account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    note TEXT,
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS request_status_history_request_idx
+ON request_status_history (request_id, changed_at DESC);
 
 CREATE UNIQUE INDEX IF NOT EXISTS bids_one_accepted_per_request_idx
 ON bids (request_id)

@@ -1,8 +1,13 @@
 const express = require('express');
 const pool = require('./db');
+const authRoutes = require('./routes/auth.routes');
+const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
+
+app.use(express.json());
+app.use('/auth', authRoutes);
 
 app.get('/', (req, res) => {
     res.send(`
@@ -58,6 +63,4 @@ app.get('/db-test', async (req, res) => {
   }
 });
 
-app.listen(3000, () => {
-  console.log('Server running on port 3000');
-});
+app.use(errorHandler);

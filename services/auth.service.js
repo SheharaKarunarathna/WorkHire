@@ -40,6 +40,54 @@ async function register({ full_name, email, password, phone }) {
 	}
 }
 
+async function login({ email, password }) {
+	const findAccountQuery = `
+		SELECT
+			a.id,
+			a.full_name,
+			a.email,
+			a.phone,
+			a.is_active,
+			a.created_at,
+			a.password_hash,
+			COALESCE(
+				ARRAY_AGG(ar.role) FILTER (WHERE ar.role IS NOT NULL),
+				ARRAY[]::account_role[]
+			) AS roles 
+		FROM accounts a
+		LEFT JOIN account_roles ar ON ar.account_id = a.id
+		WHERE a.email = $1
+		GROUP BY a.id
+	`;
+
+	const result = await pool.query(findAccountQuery, [email]); // This executes the query and returns a result object. If no rows are found, result.rowCount will be 0.
+
+	if (result.rowCount === 0) {
+		const error = new Error('Invalid email or password');
+		error.statusCode = 401;
+		throw error;
+	}
+
+	const account = result.rows[0];
+	const isPasswordValid = await bcrypt.compare(password, account.password_hash);
+
+	if (!isPasswordValid) {
+		const error = new Error('Invalid email or password');
+		error.statusCode = 401;
+		throw error;
+	}
+
+	if (!account.is_active) {
+		const error = new Error('Account is inactive');
+		error.statusCode = 403;
+		throw error;
+	}
+
+	const { password_hash, ...safeAccount } = account;
+	return safeAccount;
+}
+
 module.exports = {
 	register,
+	login,
 };

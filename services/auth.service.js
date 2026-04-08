@@ -1,37 +1,90 @@
 const bcrypt = require('bcryptjs');
 const pool = require('../db');
 
-async function register({ full_name, email, password, phone }) {
+async function createAccountWithRole(client, { full_name, email, password, phone, role }) {
+	const passwordHash = await bcrypt.hash(password, 12);
+
+	const insertAccountQuery = `
+		INSERT INTO accounts (full_name, email, password_hash, phone)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, full_name, email, phone, created_at
+	`;
+
+	const accountResult = await client.query(insertAccountQuery, [
+		full_name,
+		email,
+		passwordHash,
+		phone,
+	]);
+
+	const accountId = accountResult.rows[0].id;
+
+	await client.query(
+		`INSERT INTO account_roles (account_id, role) VALUES ($1, $2)`,
+		[accountId, role]
+	);
+
+	return {
+		...accountResult.rows[0],
+		roles: [role],
+	};
+}
+
+async function register({ full_name, email, password, phone, role }) {
+	const client = await pool.connect();
+	const normalizedRole = String(role || '').toLowerCase();
+	const allowedRoles = ['user', 'worker'];
+
+	if (!allowedRoles.includes(normalizedRole)) {
+		const error = new Error('role must be either user or worker');
+		error.statusCode = 400;
+		throw error;
+	}
+
+	try {
+		await client.query('BEGIN');
+
+		const account = await createAccountWithRole(client, {
+			full_name,
+			email,
+			password,
+			phone,
+			role: normalizedRole,
+		});
+
+		await client.query('COMMIT');
+
+		return account;
+	} catch (error) {
+		await client.query('ROLLBACK');
+		throw error;
+	} finally {
+		client.release();
+	}
+}
+
+async function createOperator({ full_name, email, password, phone }) {
 	const client = await pool.connect();
 
 	try {
 		await client.query('BEGIN');
 
-		const passwordHash = await bcrypt.hash(password, 12);
-
-		const insertAccountQuery = `
-			INSERT INTO accounts (full_name, email, password_hash, phone)
-			VALUES ($1, $2, $3, $4)
-			RETURNING id, full_name, email, phone, created_at
-		`;
-
-		const accountResult = await client.query(insertAccountQuery, [
+		const operatorAccount = await createAccountWithRole(client, {
 			full_name,
 			email,
-			passwordHash,
+			password,
 			phone,
-		]);
-
-		const accountId = accountResult.rows[0].id;
+			role: 'operator',
+		});
 
 		await client.query(
-			`INSERT INTO account_roles (account_id, role) VALUES ($1, 'user')`,
-			[accountId]
+			`INSERT INTO operator_profiles (account_id) VALUES ($1)`,
+			[operatorAccount.id]
 		);
 
 		await client.query('COMMIT');
 
-		return accountResult.rows[0];
+		return operatorAccount;
 	} catch (error) {
 		await client.query('ROLLBACK');
 		throw error;
@@ -90,4 +143,5 @@ async function login({ email, password }) {
 module.exports = {
 	register,
 	login,
+	createOperator,
 };

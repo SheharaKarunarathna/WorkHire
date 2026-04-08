@@ -1,9 +1,17 @@
 function validateRegister(req, res, next) {
-	const { full_name, email, password, phone } = req.body;
+	const { full_name, email, password, phone, role } = req.body;
+	const normalizedRole = String(role || '').toLowerCase();
+	const allowedRoles = ['user', 'worker'];
 
-	if (!full_name || !email || !password || !phone) {
+	if (!full_name || !email || !password || !phone || !role) {
 		return res.status(400).json({
-			error: 'full_name, email, password, and phone are required',
+			error: 'full_name, email, password, phone, and role are required',
+		});
+	}
+
+	if (!allowedRoles.includes(normalizedRole)) {
+		return res.status(400).json({
+			error: 'role must be either user or worker',
 		});
 	}
 
@@ -18,6 +26,8 @@ function validateRegister(req, res, next) {
 			error: 'phone must be exactly 10 digits',
 		});
 	}
+
+	req.body.role = normalizedRole;
 
 	next(); // This next tag runs the register function in the auth.controller.js file if all validations pass
 }

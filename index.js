@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('./db');
 const authRoutes = require('./routes/auth.routes');
+const requestRoutes = require('./routes/request.routes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -8,6 +9,7 @@ const PORT = 3000;
 
 app.use(express.json());
 app.use('/auth', authRoutes);
+app.use('/requests', requestRoutes);
 
 app.get('/', (req, res) => {
     res.send(`

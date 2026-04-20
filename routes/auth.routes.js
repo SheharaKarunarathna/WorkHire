@@ -12,5 +12,4 @@ router.post('/register', validateRegister, register);
 router.post('/login', validateLogin, login);
 router.get('/me', authenticateToken, me);
 router.post('/operators', authenticateToken, authorizeRoles(['admin']), validateCreateOperator, createOperator);
-
 module.exports = router;

@@ -89,15 +89,23 @@ function validateCreateRequest(req, res, next) {
 			});
 		}
 
-        else if (start <= today.getTime()) {
-            return res.status(400).json({
-                error: 'preferred_start must not be a past datetime',
-            });
-        }
+        // else if (start <= today.getTime()) {
+        //     return res.status(400).json({
+        //         error: 'preferred_start must not be a past datetime',
+        //     });
+        // }
 	}
+
+
+
+
 
 	req.body.request_type = normalizedRequestType;
 	next();
 }
 
 module.exports = validateCreateRequest;
+
+
+
+// worker ID f492ed3d-f96a-41e1-98ce-85f78e6ed62e

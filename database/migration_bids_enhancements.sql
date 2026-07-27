@@ -37,12 +37,11 @@ CREATE TABLE IF NOT EXISTS bids(
 -- Business Rule: A worker cannot place multiple active bids on the same request
 -- This constraint allows only one active/pending bid per worker per request
 
-ALTER TABLE bids
-ADD CONSTRAINT bids_one_per_worker_per_request UNIQUE (request_id, worker_account_id)
-WHERE status IN ('active', 'accepted')
-ON CONFLICT DO NOTHING;
+CREATE UNIQUE INDEX IF NOT EXISTS bids_one_per_worker_per_request
+ON bids (request_id, worker_account_id)
+WHERE status IN ('active', 'accepted');
 
--- Note: If the above constraint already exists, the ON CONFLICT DO NOTHING will safely skip it
+-- Note: IF NOT EXISTS safely skips creation if the index already exists
 
 -- =====================================================================
 -- 3. PERFORMANCE INDEXES

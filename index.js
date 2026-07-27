@@ -1,4 +1,5 @@
 const express = require('express');
+const cookieParser = require('cookie-parser');
 const pool = require('./db');
 const authRoutes = require('./routes/auth.routes');
 const requestRoutes = require('./routes/request.routes');
@@ -8,6 +9,7 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+app.use(cookieParser());
 app.use('/auth', authRoutes);
 app.use('/requests', requestRoutes);
 

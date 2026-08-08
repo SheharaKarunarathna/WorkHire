@@ -3,6 +3,9 @@ const cookieParser = require('cookie-parser');
 const pool = require('./db');
 const authRoutes = require('./routes/auth.routes');
 const requestRoutes = require('./routes/request.routes');
+const bidRoutes = require('./routes/bid.routes');
+const workerRoutes = require('./routes/worker.routes');
+const reviewRoutes = require('./routes/review.routes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -12,6 +15,9 @@ app.use(express.json());
 app.use(cookieParser());
 app.use('/auth', authRoutes);
 app.use('/requests', requestRoutes);
+app.use('/bids', bidRoutes);
+app.use('/workers', workerRoutes);
+app.use('/reviews', reviewRoutes);
 
 app.get('/', (req, res) => {
     res.send(`

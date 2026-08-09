@@ -1,5 +1,8 @@
+const http = require('http');
 const express = require('express');
 const cookieParser = require('cookie-parser');
+require('dotenv').config();
+
 const pool = require('./db');
 const authRoutes = require('./routes/auth.routes');
 const requestRoutes = require('./routes/request.routes');
@@ -7,9 +10,10 @@ const bidRoutes = require('./routes/bid.routes');
 const workerRoutes = require('./routes/worker.routes');
 const reviewRoutes = require('./routes/review.routes');
 const errorHandler = require('./middleware/errorHandler');
+const { initSocket } = require('./services/socket.service');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(cookieParser());
@@ -51,16 +55,12 @@ app.get('/', (req, res) => {
             <body>
                 <div class="card">
                     <h1>WorkHire is running</h1>
-                    <p>Your Node + Express server is up and visible.</p>
+                    <p>Your Node + Express + Socket.io server is up and visible.</p>
                     <p>Open <strong>http://localhost:${PORT}</strong></p>
                 </div>
             </body>
         </html>
     `);
-});
-
-app.listen(PORT, () => {
-    console.log(`WorkHire server running on http://localhost:${PORT}`);
 });
 
 app.get('/db-test', async (req, res) => {
@@ -74,3 +74,13 @@ app.get('/db-test', async (req, res) => {
 });
 
 app.use(errorHandler);
+
+// Wrap Express app in HTTP server for WebSocket support
+const server = http.createServer(app);
+
+// Initialize Socket.io Manager
+initSocket(server);
+
+server.listen(PORT, () => {
+    console.log(`WorkHire HTTP & WebSocket server running on http://localhost:${PORT}`);
+});

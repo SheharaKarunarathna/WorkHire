@@ -1,4 +1,6 @@
+
 const pool = require('../db');
+const { sendNotification, emitToJobRoom } = require('./socket.service');
 
 async function ensureWorkerRole(client, workerAccountId) {
 	const workerRoleResult = await client.query(
@@ -84,6 +86,21 @@ async function createRequest(userAccountId, payload) {
 
 		await client.query('COMMIT');
 
+		if (request_type === 'direct' && target_worker_account_id) {
+			sendNotification(target_worker_account_id, 'notification:direct_request', {
+				request_id: createdRequest.id,
+				title: createdRequest.title,
+				description: createdRequest.description,
+				location: createdRequest.location,
+				requester_account_id: userAccountId,
+				budget: directDetails?.budget,
+				urgency: directDetails?.urgency,
+				preferred_start: directDetails?.preferred_start,
+				preferred_end: directDetails?.preferred_end,
+				created_at: createdRequest.created_at,
+			});
+		}
+
 		return {
 			...createdRequest,
 			direct_details: directDetails,
@@ -135,7 +152,7 @@ async function respondToDirectRequest(workerAccountId, requestId, { action, note
 
 		// 1. Fetch direct request details
 		const directResult = await client.query(
-			`SELECT d.request_id, d.target_worker_account_id, d.response_status, r.status AS current_request_status
+			`SELECT d.request_id, d.target_worker_account_id, d.response_status, r.status AS current_request_status, r.user_account_id
 			 FROM direct_request_details d
 			 JOIN requests r ON d.request_id = r.id
 			 WHERE d.request_id = $1 LIMIT 1 FOR UPDATE`,
@@ -204,6 +221,23 @@ async function respondToDirectRequest(workerAccountId, requestId, { action, note
 
 		await client.query('COMMIT');
 
+		// Emit real-time notifications to requester
+		sendNotification(directDetail.user_account_id, 'notification:direct_response', {
+			request_id: requestId,
+			action,
+			status: newStatus,
+			worker_account_id: workerAccountId,
+			note: note || null,
+			responded_at: new Date().toISOString(),
+		});
+
+		emitToJobRoom(requestId, 'job:status_updated', {
+			request_id: requestId,
+			new_status: newStatus,
+			assigned_worker_account_id: action === 'accept' ? workerAccountId : null,
+			note: note || `Direct request ${newStatus} by worker`,
+		});
+
 		return {
 			message: `Direct request ${newStatus} successfully`,
 			request_id: requestId,
@@ -232,7 +266,7 @@ async function updateJobStatus(workerAccountId, requestId, { status, note }) {
 		await client.query('BEGIN');
 
 		const requestResult = await client.query(
-			`SELECT id, assigned_worker_account_id, status FROM requests WHERE id = $1 LIMIT 1 FOR UPDATE`,
+			`SELECT id, user_account_id, assigned_worker_account_id, status FROM requests WHERE id = $1 LIMIT 1 FOR UPDATE`,
 			[requestId]
 		);
 
@@ -278,7 +312,26 @@ async function updateJobStatus(workerAccountId, requestId, { status, note }) {
 
 		await client.query('COMMIT');
 
-		return updateResult.rows[0];
+		const updatedJob = updateResult.rows[0];
+
+		// Emit real-time notifications
+		sendNotification(request.user_account_id, 'job:status_updated', {
+			request_id: requestId,
+			new_status: normalizedStatus,
+			changed_by: workerAccountId,
+			note: note || `Job status updated to ${normalizedStatus}`,
+			updated_at: updatedJob.updated_at,
+		});
+
+		emitToJobRoom(requestId, 'job:status_updated', {
+			request_id: requestId,
+			new_status: normalizedStatus,
+			changed_by: workerAccountId,
+			note: note || `Job status updated to ${normalizedStatus}`,
+			updated_at: updatedJob.updated_at,
+		});
+
+		return updatedJob;
 	} catch (error) {
 		await client.query('ROLLBACK');
 		throw error;

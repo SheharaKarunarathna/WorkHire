@@ -1,4 +1,5 @@
 const pool = require('../db');
+const { sendNotification, emitToJobRoom } = require('./socket.service');
 
 async function placeBid(workerAccountId, { request_id, amount, message }) {
 	const client = await pool.connect();
@@ -77,7 +78,20 @@ async function placeBid(workerAccountId, { request_id, amount, message }) {
 		);
 
 		await client.query('COMMIT');
-		return insertBidResult.rows[0];
+
+		const insertedBid = insertBidResult.rows[0];
+
+		// Emit real-time notification to request owner
+		sendNotification(targetRequest.user_account_id, 'notification:new_bid', {
+			bid_id: insertedBid.id,
+			request_id: targetRequest.id,
+			amount: insertedBid.amount,
+			worker_account_id: workerAccountId,
+			message: insertedBid.message,
+			created_at: insertedBid.created_at,
+		});
+
+		return insertedBid;
 	} catch (error) {
 		await client.query('ROLLBACK');
 		throw error;
@@ -263,9 +277,26 @@ async function acceptBid(userAccountId, requestId, bidId) {
 
 		await client.query('COMMIT');
 
+		const acceptedBid = acceptedBidResult.rows[0];
+
+		// Emit real-time notifications
+		sendNotification(winningBid.worker_account_id, 'notification:bid_accepted', {
+			bid_id: bidId,
+			request_id: requestId,
+			accepted_by: userAccountId,
+			accepted_at: acceptedBid.updated_at,
+		});
+
+		emitToJobRoom(requestId, 'job:status_updated', {
+			request_id: requestId,
+			new_status: 'accepted',
+			assigned_worker_account_id: winningBid.worker_account_id,
+			note: `Bid ${bidId} accepted by requester`,
+		});
+
 		return {
 			message: 'Bid accepted successfully',
-			accepted_bid: acceptedBidResult.rows[0],
+			accepted_bid: acceptedBid,
 			assigned_worker_account_id: winningBid.worker_account_id,
 		};
 	} catch (error) {

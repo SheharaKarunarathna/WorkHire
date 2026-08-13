@@ -113,7 +113,7 @@ function getIO() {
  * @param {object} payload - Event payload data
  */
 function sendNotification(userId, event, payload) {
-    if (!userId || !event) return;
+    if (!userId || !event || !io) return;
     const room = `user_${userId}`;
     const instance = getIO();
     instance.to(room).emit(event, payload);
@@ -126,7 +126,7 @@ function sendNotification(userId, event, payload) {
  * @param {object} payload - Event payload data
  */
 function emitToRoom(room, event, payload) {
-    if (!room || !event) return;
+    if (!room || !event || !io) return;
     const instance = getIO();
     instance.to(room).emit(event, payload);
 }

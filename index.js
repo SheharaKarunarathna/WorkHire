@@ -9,6 +9,7 @@ const requestRoutes = require('./routes/request.routes');
 const bidRoutes = require('./routes/bid.routes');
 const workerRoutes = require('./routes/worker.routes');
 const reviewRoutes = require('./routes/review.routes');
+const scheduleRoutes = require('./routes/schedule.routes');
 const errorHandler = require('./middleware/errorHandler');
 const { initSocket } = require('./services/socket.service');
 
@@ -22,6 +23,7 @@ app.use('/requests', requestRoutes);
 app.use('/bids', bidRoutes);
 app.use('/workers', workerRoutes);
 app.use('/reviews', reviewRoutes);
+app.use('/schedules', scheduleRoutes);
 
 app.get('/', (req, res) => {
     res.send(`

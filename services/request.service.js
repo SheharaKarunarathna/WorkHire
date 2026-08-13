@@ -1,6 +1,7 @@
 
 const pool = require('../db');
 const { sendNotification, emitToJobRoom } = require('./socket.service');
+const { bookScheduleSlot, releaseScheduleSlot } = require('./schedule.service');
 
 async function ensureWorkerRole(client, workerAccountId) {
 	const workerRoleResult = await client.query(
@@ -28,6 +29,7 @@ async function createRequest(userAccountId, payload) {
 		urgency,
 		preferred_start,
 		preferred_end,
+		slot_id,
 	} = payload;
 
 	try {
@@ -76,6 +78,15 @@ async function createRequest(userAccountId, payload) {
 			);
 
 			directDetails = directInsertResult.rows[0];
+		}
+
+		if (slot_id) {
+			await bookScheduleSlot(
+				client,
+				slot_id,
+				createdRequest.id,
+				request_type === 'direct' ? target_worker_account_id : null
+			);
 		}
 
 		await client.query(
@@ -206,6 +217,10 @@ async function respondToDirectRequest(workerAccountId, requestId, { action, note
 			);
 		}
 
+		if (action === 'reject') {
+			await releaseScheduleSlot(client, requestId);
+		}
+
 		// 4. Audit trail
 		await client.query(
 			`INSERT INTO request_status_history (request_id, from_status, to_status, changed_by_account_id, note)
@@ -309,6 +324,10 @@ async function updateJobStatus(workerAccountId, requestId, { status, note }) {
 			 VALUES ($1, $2, $3, $4, $5)`,
 			[requestId, request.status, normalizedStatus, workerAccountId, note || `Job status updated to ${normalizedStatus}`]
 		);
+
+		if (normalizedStatus === 'cancelled') {
+			await releaseScheduleSlot(client, requestId);
+		}
 
 		await client.query('COMMIT');
 

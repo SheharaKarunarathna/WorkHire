@@ -100,6 +100,14 @@ function validateCreateRequest(req, res, next) {
 
 
 
+	if (req.body.slot_id !== undefined && req.body.slot_id !== null) {
+		if (!isUuid(req.body.slot_id)) {
+			return res.status(400).json({
+				error: 'slot_id must be a valid UUID when provided',
+			});
+		}
+	}
+
 	req.body.request_type = normalizedRequestType;
 	next();
 }

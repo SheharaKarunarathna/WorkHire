@@ -430,6 +430,113 @@ async function getRequestById(requestId) {
 	return request;
 }
 
+async function getOpenRequests(options = {}) {
+	const { location, search, limit = 50, offset = 0 } = options;
+
+	let sql = `
+		SELECT 
+			r.id,
+			r.user_account_id,
+			u.full_name AS requester_name,
+			r.request_type,
+			r.title,
+			r.description,
+			r.location,
+			r.status,
+			r.created_at,
+			r.updated_at,
+			(SELECT COUNT(*)::INT FROM bids b WHERE b.request_id = r.id AND b.status = 'active') AS bid_count
+		FROM requests r
+		JOIN accounts u ON r.user_account_id = u.id
+		WHERE r.request_type = 'open' AND r.status = 'pending'
+	`;
+
+	const params = [];
+	let paramIdx = 1;
+
+	if (location) {
+		sql += ` AND r.location ILIKE $${paramIdx++}`;
+		params.push(`%${location}%`);
+	}
+
+	if (search) {
+		sql += ` AND (r.title ILIKE $${paramIdx} OR r.description ILIKE $${paramIdx})`;
+		paramIdx++;
+		params.push(`%${search}%`);
+	}
+
+	sql += ` ORDER BY r.created_at DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
+	params.push(parseInt(limit, 10), parseInt(offset, 10));
+
+	const result = await pool.query(sql, params);
+	return result.rows;
+}
+
+async function cancelRequestByUser(userAccountId, requestId, note) {
+	const client = await pool.connect();
+
+	try {
+		await client.query('BEGIN');
+
+		const requestResult = await client.query(
+			`SELECT id, user_account_id, status FROM requests WHERE id = $1 LIMIT 1 FOR UPDATE`,
+			[requestId]
+		);
+
+		if (requestResult.rowCount === 0) {
+			const error = new Error('Request not found');
+			error.statusCode = 404;
+			throw error;
+		}
+
+		const request = requestResult.rows[0];
+
+		if (request.user_account_id !== userAccountId) {
+			const error = new Error('Forbidden: You can only cancel requests you created');
+			error.statusCode = 403;
+			throw error;
+		}
+
+		if (['completed', 'cancelled'].includes(request.status)) {
+			const error = new Error(`Cannot cancel request in status: ${request.status}`);
+			error.statusCode = 400;
+			throw error;
+		}
+
+		const updateResult = await client.query(
+			`UPDATE requests SET status = 'cancelled', updated_at = NOW() WHERE id = $1 RETURNING *`,
+			[requestId]
+		);
+
+		await client.query(
+			`INSERT INTO request_status_history (request_id, from_status, to_status, changed_by_account_id, note)
+			 VALUES ($1, $2, 'cancelled', $3, $4)`,
+			[requestId, request.status, userAccountId, note || 'Request cancelled by user']
+		);
+
+		await releaseScheduleSlot(client, requestId);
+
+		await client.query('COMMIT');
+
+		const cancelledJob = updateResult.rows[0];
+
+		emitToJobRoom(requestId, 'job:status_updated', {
+			request_id: requestId,
+			new_status: 'cancelled',
+			changed_by: userAccountId,
+			note: note || 'Request cancelled by user',
+			updated_at: cancelledJob.updated_at,
+		});
+
+		return cancelledJob;
+	} catch (error) {
+		await client.query('ROLLBACK');
+		throw error;
+	} finally {
+		client.release();
+	}
+}
+
 module.exports = {
 	createRequest,
 	getIncomingDirectRequests,
@@ -437,4 +544,6 @@ module.exports = {
 	updateJobStatus,
 	getUserRequests,
 	getRequestById,
+	getOpenRequests,
+	cancelRequestByUser,
 };

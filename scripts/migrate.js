@@ -8,6 +8,7 @@ const migrationFiles = [
 	'migration_bids_enhancements.sql',
 	'migration_worker_profiles_enhancements.sql',
 	'migration_worker_schedules.sql',
+	'migration_chat_messages.sql',
 ];
 
 async function runMigrations() {

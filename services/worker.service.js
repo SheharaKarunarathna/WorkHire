@@ -114,8 +114,36 @@ async function listWorkers({ skill, available_only }) {
 	return result.rows;
 }
 
+async function updateWorkerVerification(workerAccountId, verification_status) {
+	const allowedStatuses = ['pending', 'verified', 'rejected'];
+	const status = String(verification_status || '').toLowerCase();
+
+	if (!allowedStatuses.includes(status)) {
+		const error = new Error('verification_status must be pending, verified, or rejected');
+		error.statusCode = 400;
+		throw error;
+	}
+
+	const result = await pool.query(
+		`UPDATE worker_profiles
+		 SET verification_status = $1, updated_at = NOW()
+		 WHERE account_id = $2
+		 RETURNING *`,
+		[status, workerAccountId]
+	);
+
+	if (result.rowCount === 0) {
+		const error = new Error('Worker profile not found');
+		error.statusCode = 404;
+		throw error;
+	}
+
+	return getWorkerProfile(workerAccountId);
+}
+
 module.exports = {
 	getWorkerProfile,
 	updateWorkerProfile,
 	listWorkers,
+	updateWorkerVerification,
 };

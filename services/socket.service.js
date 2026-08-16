@@ -1,5 +1,6 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
+const { saveChatMessage } = require('./chat.service');
 
 let io = null;
 
@@ -73,17 +74,23 @@ function initSocket(server, options = {}) {
         });
 
         // Event: Real-time chat message within job room
-        socket.on('chat:send_message', (data) => {
+        socket.on('chat:send_message', async (data) => {
             const { requestId, text } = data || {};
             if (requestId && text) {
-                const jobRoom = `request_${requestId}`;
-                const messagePayload = {
-                    request_id: requestId,
-                    sender_id: userId,
-                    text,
-                    timestamp: new Date().toISOString()
-                };
-                io.to(jobRoom).emit('chat:message_received', messagePayload);
+                try {
+                    const savedMessage = await saveChatMessage(requestId, userId, text);
+                    const jobRoom = `request_${requestId}`;
+                    const messagePayload = {
+                        id: savedMessage.id,
+                        request_id: requestId,
+                        sender_id: userId,
+                        text: savedMessage.message_text,
+                        timestamp: savedMessage.created_at
+                    };
+                    io.to(jobRoom).emit('chat:message_received', messagePayload);
+                } catch (err) {
+                    console.error('[Socket.io] Error saving chat message:', err.message);
+                }
             }
         });
 

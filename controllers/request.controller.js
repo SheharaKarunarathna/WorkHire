@@ -1,4 +1,5 @@
 const requestService = require('../services/request.service');
+const chatService = require('../services/chat.service');
 
 async function createRequest(req, res, next) {
 	try {
@@ -8,6 +9,16 @@ async function createRequest(req, res, next) {
 			message: 'Request created successfully',
 			request: createdRequest,
 		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+async function getOpenRequests(req, res, next) {
+	try {
+		const { location, search, limit, offset } = req.query;
+		const requests = await requestService.getOpenRequests({ location, search, limit, offset });
+		return res.status(200).json({ requests });
 	} catch (error) {
 		next(error);
 	}
@@ -59,6 +70,24 @@ async function updateJobStatus(req, res, next) {
 	}
 }
 
+async function cancelRequest(req, res, next) {
+	try {
+		const { note } = req.body || {};
+		const cancelledJob = await requestService.cancelRequestByUser(
+			req.user.sub,
+			req.params.requestId,
+			note
+		);
+
+		return res.status(200).json({
+			message: 'Request cancelled successfully',
+			request: cancelledJob,
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
 async function getMyRequests(req, res, next) {
 	try {
 		const requests = await requestService.getUserRequests(req.user.sub);
@@ -77,11 +106,23 @@ async function getRequestById(req, res, next) {
 	}
 }
 
+async function getChatHistory(req, res, next) {
+	try {
+		const messages = await chatService.getChatHistory(req.params.requestId, req.user.sub);
+		return res.status(200).json({ messages });
+	} catch (error) {
+		next(error);
+	}
+}
+
 module.exports = {
 	createRequest,
+	getOpenRequests,
 	getIncomingDirectRequests,
 	respondDirectRequest,
 	updateJobStatus,
+	cancelRequest,
 	getMyRequests,
 	getRequestById,
+	getChatHistory,
 };

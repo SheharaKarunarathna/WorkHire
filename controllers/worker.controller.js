@@ -39,9 +39,28 @@ async function getWorkerById(req, res, next) {
 	}
 }
 
+async function updateWorkerVerification(req, res, next) {
+	try {
+		const targetWorkerId = req.params.workerId || req.user.sub;
+		const { verification_status } = req.body;
+		const updatedProfile = await workerService.updateWorkerVerification(
+			targetWorkerId,
+			verification_status
+		);
+
+		return res.status(200).json({
+			message: 'Worker verification status updated successfully',
+			profile: updatedProfile,
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
 module.exports = {
 	getMyProfile,
 	updateProfile,
 	getAllWorkers,
 	getWorkerById,
+	updateWorkerVerification,
 };
